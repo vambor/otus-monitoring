@@ -1,0 +1,42 @@
+data_dir: /tmp/vector
+sources:
+  filebeat:
+    type: logstash
+    address: 0.0.0.0:5044
+
+transforms:
+  parse_nginx:
+    type: remap
+    inputs:
+      - filebeat
+    source: |
+      parsed, err = parse_nginx_log(.message, "combined")
+
+      if err == null {
+        .remote_addr = parsed.remote_addr
+        .method = parsed.method
+        .path = parsed.path
+        .protocol = parsed.protocol
+        .status = to_int!(parsed.status)
+        .bytes_sent = to_int!(parsed.body_bytes_sent)
+        .http_referer = parsed.http_referer
+        .user_agent = parsed.http_user_agent
+        .@timestamp = parsed.timestamp
+      }
+
+sinks:
+  elastic:
+    type: elasticsearch
+    inputs:
+      - parse_nginx
+    endpoints:
+      - http://127.0.0.1:9200
+    auth:
+      strategy: basic
+      user: beats_test
+      password: "TestPassword123!"
+    mode: bulk
+    compression: gzip
+
+    bulk:
+      index: "nginx-access-%Y.%m.%d"
